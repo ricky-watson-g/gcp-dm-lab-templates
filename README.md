@@ -1,2 +1,2 @@
-# gcp-dm-lab-templates
-Templates for developers of hands-on-labs within the qwikLABS environment.
+# qwikLABs HOL DM Templates
+This repo will provide guidance and standard templates for those creating GCP Deployment Manager scripts in their qwikLABs Hands on Lab (HOL).
