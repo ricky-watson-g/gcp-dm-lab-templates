@@ -61,8 +61,7 @@ resources:
         - {{ properties["hosttag"] }}
 ```
 
-#### Notes
- - the properties usage  
- - variables (in this instance EMAIL) are used inside {{ }} and spacing is important
+#### Notes 
+ - locally decleard variables (in this instance EMAIL) are used inside {{ }} and spacing is important
  - $ref allows you to grab a subvalue
  - env are values that passed down outside outside of the proerties, such as name
