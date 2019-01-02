@@ -62,6 +62,6 @@ resources:
 ```
 
 #### Notes 
- - locally decleard variables (in this instance EMAIL) are used inside {{ }} and spacing is important
- - $ref allows you to grab a subvalue
- - env are values that passed down outside outside of the proerties, such as name
+ - locally decleared variables (in this instance EMAIL) are used inside {{ }} and spacing is important
+ - $ref allows you to reference a subvalue
+ - env contains values passed down outside outside of the properties, such as name
