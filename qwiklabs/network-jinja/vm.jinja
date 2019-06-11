@@ -26,7 +26,7 @@ resources:
       initializeParams:
         sourceImage: projects/debian-cloud/global/images/family/debian-9
     networkInterfaces:
-    - network: $(ref.{{ properties["network"] }}.selfLink)
+    - network: $(ref.{{ env["deployment"] }}-{{ properties["network"] }}.selfLink)
       accessConfigs:
       - name: External NAT
         type: ONE_TO_ONE_NAT
@@ -38,3 +38,33 @@ resources:
     tags:
       items:
         - {{ properties["hosttag"] }}
+    metadata:
+      items:
+      - key: startup-script
+        value: |
+          #!/bin/bash
+          gcloud beta runtime-config configs variables set test-value \
+            "popping" --config-name test-config --is-text
+          gcloud beta runtime-config configs variables set \
+            success/{{ env["name"] }} success --config-name {{ env["name"] }}-config
+- type: runtimeconfig.v1beta1.config
+  name: {{ env["name"] }}-config
+  properties:
+    config: {{ env["name"] }}-config
+- type: runtimeconfig.v1beta1.waiter
+  name: {{ env["name"] }}-waiter
+  metadata:
+    dependsOn:
+    - {{ env["name"] }}
+  properties:
+    parent: $(ref.{{ env["name"] }}-config.name)
+    waiter: {{ env["name"] }}-waiter
+    timeout: 3600s
+    success:
+      cardinality:
+        path: /success
+        number: 1
+    failure:
+      cardinality:
+        path: /failure
+        number: 1

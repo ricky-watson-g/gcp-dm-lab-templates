@@ -1,0 +1,58 @@
+imports:
+- path: vm.jinja
+  name: vm.jinja
+
+resources:
+- name: lab-network
+  type: compute.v1.network
+  properties:
+    autoCreateSubnetworks: false
+
+- name: subnet-1
+  type: compute.v1.subnetwork
+  properties:
+    region: us-central1
+    network : $(ref.lab-network.selfLink)
+    ipCidrRange: "192.168.0.0/20"
+
+- name: firewall-rule-rdp
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.lab-network.selfLink)
+    sourceRanges: [ "0.0.0.0/0" ]
+    targetTags: [ "rdp-server" ]
+    allowed:
+    - IPProtocol: TCP
+      ports: [ "3389" ]
+
+- name: firewall-rule-ssh
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.lab-network.selfLink)
+    sourceRanges: [ "0.0.0.0/0" ]
+    targetTags: [ "ssh-server" ]
+    allowed:
+    - IPProtocol: TCP
+      ports: [ "22" ]
+
+- name: linux-vm
+  type: vm.jinja
+  properties:
+    zone: us-central1-f
+    machine-type: f1-micro
+    source-image: projects/debian-cloud/global/images/family/debian-9
+    subnet: $(ref.subnet-1.selfLink)
+    tags: ssh-server
+    config-script: | 
+      #!/bin/bash
+
+- name: windows-vm
+  type: vm.jinja
+  properties:
+    zone: us-central1-f
+    machine-type: n1-standard-2
+    source-image: projects/windows-cloud/global/images/family/windows-2016
+    subnet: $(ref.subnet-1.selfLink)
+    tags: rdp-server
+    config-script: | 
+      # powershell

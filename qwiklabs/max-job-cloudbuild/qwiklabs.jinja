@@ -1,0 +1,59 @@
+resources:
+- name: {{ env['project'] }}
+  type: storage.v1.bucket
+  accessControl:
+    gcpIamPolicy:
+      bindings:
+      - role: roles/storage.objectViewer
+        members:
+        - "allUsers"
+
+- name: {{ env['project'] }}-coldline
+  type: storage.v1.bucket
+  properties:
+    storageClass: COLDLINE
+  accessControl:
+    gcpIamPolicy:
+      bindings:
+      - role: roles/storage.objectViewer
+        members:
+        - "allUsers"
+
+- name: MyTopic
+  type: gcp-types/pubsub-v1:projects.topics
+  properties:
+    topic: MyTopic
+
+- name: Logs
+  type: gcp-types/bigquery-v2:datasets
+  properties:
+    datasetReference:
+      datasetId: Logs
+
+- name: logs
+  type: gcp-types/bigquery-v2:tables
+  properties:
+    datasetId: $(ref.Logs.datasetReference.datasetId)
+    tableReference:
+      tableId: logs
+    schema:
+      fields:
+        - name: user_id
+          type: STRING
+        - name: ip
+          type: STRING
+        - name: datetime
+          type: DATETIME
+        - name: http_request
+          type: STRING
+        - name: lat
+          type: FLOAT
+        - name: long
+          type: FLOAT
+        - name: http_response
+          type: INTEGER
+        - name: user_agent
+          type: STRING
+        - name: num_bytes
+          type: INTEGER
+

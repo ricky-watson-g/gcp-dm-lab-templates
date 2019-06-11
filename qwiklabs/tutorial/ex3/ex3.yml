@@ -1,0 +1,8 @@
+
+imports:
+- path: vm.jinja
+  name: vm.jinja
+  
+resources:
+- name: "web-server"
+  type: vm.jinja

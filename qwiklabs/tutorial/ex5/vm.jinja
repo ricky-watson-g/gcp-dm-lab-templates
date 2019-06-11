@@ -1,0 +1,75 @@
+
+resources:
+- name: {{ env['deployment'] }}-{{ env['name'] }}
+  type: gcp-types/compute-v1:instances
+  properties:
+    zone: us-central1-f
+    machineType: zones/us-central1-f/machineTypes/n1-standard-1
+    disks:
+    - boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: projects/debian-cloud/global/images/family/debian-9
+    networkInterfaces:
+    - network: global/networks/default
+      accessConfigs:
+      - name: External NAT
+        type: ONE_TO_ONE_NAT
+    serviceAccounts:
+      - email: {{ env['project'] }}@{{ env['project'] }}.iam.gserviceaccount.com
+        scopes:
+        - https://www.googleapis.com/auth/cloud-platform
+        - https://www.googleapis.com/auth/source.full_control
+    metadata:
+      items:
+      - key: startup-script
+        value: |
+          #!/bin/bash
+          echo starting...
+          #PASSWORD=$(cat /dev/urandom | LANG=LC_TYPE tr -cd '[:alnum:]' | fold -w 8 | head -1)
+          PASSWORD="password"
+          echo password done...
+          gcloud beta runtime-config configs variables set password \
+            "$PASSWORD" --config-name {{ env['deployment'] }}-installer-config --is-text
+          if [ $? == 0 ]
+          then
+            echo success
+            sleep 30
+            gcloud beta runtime-config configs variables set \
+              success/{{ env['deployment'] }}-waiter success --config-name {{ env['deployment'] }}-installer-config
+          else
+            echo failure
+            sleep 30
+            gcloud beta runtime-config configs variables set \
+              failure/{{ env['deployment'] }}-waiter failure --config-name {{ env['deployment'] }}-installer-config
+          fi
+- type: runtimeconfig.v1beta1.config
+  name: {{ env['deployment'] }}-installer-config
+  properties:
+    config: {{ env['deployment'] }}-installer-config
+- type: runtimeconfig.v1beta1.waiter
+  name: {{ env['deployment'] }}-waiter
+  properties:
+    parent: $(ref.{{ env['deployment'] }}-installer-config.name)
+    waiter: {{ env['deployment'] }}-waiter
+    timeout: 300s
+    success:
+      cardinality:
+        path: /success
+        number: 1
+    failure:
+      cardinality:
+        path: /failure
+        number: 1
+  metadata:
+    dependsOn:
+    - {{ env['deployment'] }}-{{ env['name'] }}
+- name: password
+  type: runtimeconfig.v1beta1.variable
+  properties:
+    parent: $(ref.{{ env['deployment'] }}-installer-config.name)
+    variable: password
+
+outputs:
+- name: password
+  value: $(ref.password.value)

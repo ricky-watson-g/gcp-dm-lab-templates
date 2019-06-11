@@ -1,0 +1,13 @@
+imports:
+- name: vm.jinja
+  path: vm.jinja
+
+resources:
+- name: my-vm
+  type: vm.jinja
+
+outputs:
+- name: ExternalIP
+  value: $(ref.my-vm.ExternalIP)
+- name: InternalIP
+  value: $(ref.my-vm.InternalIP)

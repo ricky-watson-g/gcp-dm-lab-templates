@@ -1,0 +1,22 @@
+
+resources:
+- name: {{ env['deployment'] }}-{{ env['name'] }}
+  type: gcp-types/compute-v1:instances
+  properties:
+    zone: us-central1-f
+    machineType: zones/us-central1-f/machineTypes/n1-standard-1
+    disks:
+    - boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: projects/debian-cloud/global/images/family/debian-9
+    networkInterfaces:
+    - network: global/networks/default
+      accessConfigs:
+      - name: External NAT
+        type: ONE_TO_ONE_NAT
+outputs:
+- name: ExternalIP
+  value: $(ref.{{ env['deployment'] }}-{{ env['name'] }}.networkInterfaces[0].accessConfigs[0].natIP)
+- name: InternalIP
+  value: $(ref.{{ env['deployment'] }}-{{ env['name'] }}.networkInterfaces[0].networkIP)

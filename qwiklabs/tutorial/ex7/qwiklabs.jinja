@@ -1,0 +1,23 @@
+resources:
+- name: windows-vm
+  type: compute.v1.instance
+  properties:
+    zone: {{ properties["zone"] }}
+    machineType: zones/{{ properties["zone"] }}/machineTypes/n1-standard-2
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: projects/windows-cloud/global/images/family/windows-2016
+    networkInterfaces:
+    - network: global/networks/default
+      accessConfigs:
+      - name: External NAT
+        type: ONE_TO_ONE_NAT
+    metadata:
+      items:
+      - key: windows-startup-script-cmd
+        value: |
+          net user {{ properties['userName'] }} {{ properties['userPassword'] }}
