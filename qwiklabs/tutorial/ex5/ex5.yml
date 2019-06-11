@@ -1,0 +1,12 @@
+
+imports:
+- path: vm.jinja
+  name: vm.jinja
+  
+resources:
+- name: web-server
+  type: vm.jinja
+
+outputs:
+- name: password
+  value: $(ref.web-server.password)

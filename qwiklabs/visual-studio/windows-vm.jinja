@@ -1,0 +1,90 @@
+# Copyright 2018 Google Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+{% set EMAIL = env['project'] +'@'+ env['project'] +'.iam.gserviceaccount.com' %}
+{% set vsConfig = "vsConfig" %}
+
+resources:
+- type: runtimeconfig.v1beta1.config
+  name: {{ vsConfig }}
+  properties:
+    config: {{ vsConfig }}
+- type: runtimeconfig.v1beta1.waiter
+  name: vsWaiter
+  metadata:
+    dependsOn:
+    - {{ properties["instanceName"] }}
+  properties:
+    parent: $(ref.{{ vsConfig }}.name)
+    waiter: vsWaiter
+    timeout: 3600s
+    success:
+      cardinality:
+        path: /success
+        number: 1
+    failure:
+      cardinality:
+        path: /failure
+        number: 1
+- type: gcp-types/compute-v1:instances
+  name: {{ properties["instanceName"] }}
+  properties:
+    zone: {{ properties["zone"] }}
+    machineType: zones/{{ properties["zone"] }}/machineTypes/n1-standard-4
+    disks:
+    - boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: projects/windows-cloud/global/images/family/windows-2016
+    networkInterfaces:
+    - network: global/networks/default
+      accessConfigs:
+      - name: External NAT
+        type: ONE_TO_ONE_NAT
+    serviceAccounts:
+      - email: {{ EMAIL }}
+        scopes:
+        - https://www.googleapis.com/auth/cloud-platform
+        - https://www.googleapis.com/auth/source.full_control
+    metadata:
+      items:
+      - key: windows-startup-script-ps1
+        value: |
+          # powershell
+          # get Python for the gcloud update
+          "Installing Python2 ..."
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          wget "https://www.python.org/ftp/python/2.7.15/python-2.7.15.amd64.msi" -outfile "c:\windows\TEMP\python.msi"
+          start-process msiexec.exe "/i c:\windows\TEMP\python.msi TARGETDIR=C:\python2 ALLUSERS=1 /quiet" -wait
+          $env:CLOUDSDK_PYTHON="C:\python2\python.exe"
+          "Updating/Installing gcloud ..."
+          gcloud components update -q
+          gcloud components install beta -q
+          "Installing Chrome"
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          wget "http://dl.google.com/chrome/install/375.126/chrome_installer.exe" -outfile "c:\windows\TEMP\chrome_installer.exe"
+          start-process c:\windows\TEMP\chrome_installer.exe "/silent /install" -wait
+          "Installing VS 2017 ..."
+          wget "http://storage.googleapis.com/rpw-demo1/vs.exe" -outfile "c:\windows\TEMP\vs.exe"
+          $vs = "c:\windows\TEMP\vs.exe"
+          $arguments = "--quiet --norestart --add Microsoft.VisualStudio.Workload.ManagedDesktop --add Microsoft.VisualStudio.Workload.NetCoreTools --add Microsoft.VisualStudio.Workload.NetWeb --add Microsoft.VisualStudio.Workload.Node --add Microsoft.VisualStudio.Workload.Office --add Microsoft.VisualStudio.Component.TypeScript.2.0 --add Microsoft.VisualStudio.Component.TestTools.WebLoadTest --add Component.GitHub.VisualStudio"
+          $reply = (start-process -wait $vs $arguments -WorkingDirectory "c:\windows\TEMP\" -Passthru)
+          if($reply.ExitCode -eq 0){
+            "Install success"
+            gcloud beta runtime-config configs variables set `
+                success/instance-test success --config-name vsConfig
+          } else {
+            "Install failure???!!!"
+            gcloud beta runtime-config configs variables set `
+                failure/instance-test failure --config-name vsConfig
+          }

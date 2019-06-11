@@ -22,6 +22,11 @@ Note that the follow vars are used to simplify value references.
 {% set NAME2 = "lab-2" %}
 {% set HOST_TAG = "labvm" %}
 
+
+outputs:
+- name: test-value
+  value: $(ref.test-value.text)
+
 resources:
 - name: {{ NAME1 }}
   type: vm.jinja
@@ -43,3 +48,5 @@ resources:
   type: firewall.jinja
   properties:
     network: {{ NETWORK_NAME }}
+- name: test-config
+  type: test-config.jinja

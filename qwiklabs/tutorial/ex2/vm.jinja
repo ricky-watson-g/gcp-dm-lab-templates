@@ -1,0 +1,26 @@
+resources:
+- name: {{ env["name"] }}
+  type: compute.v1.instance
+  properties:
+    zone: {{ properties["zone"] }}
+    machineType: zones/us-central1-f/machineTypes/{{ properties["machine-type"] }}
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: {{ properties["source-image"] }}
+    networkInterfaces:
+    - subnetwork: {{ properties["subnet"] }}
+      accessConfigs:
+      - name: External NAT
+        type: ONE_TO_ONE_NAT
+    tags:
+      items:
+        - {{ properties["tags"] }}
+    metadata:
+      items:
+      - key: startup-script
+        value: |
+          {{ properties["config-script"] }}

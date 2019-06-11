@@ -1,4 +1,4 @@
-# Copyright 2016 Google Inc. All rights reserved.
+# Copyright 2018 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,21 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+###  CREATE RESOURCES FOR QWIKLABS LAB
+###  Creates a standard storage bucket (project_id as name)
+###  Creates a coldline storage bucket ({project_id}-coldline as name)
+###  Creates a pubsub topic called MyTopic
+###  Creates a BigQuery dataset called Logs
+###  Creates a BigQuery table called logs with a defined schema
 
-# This template creates a VPC with 2 subnets
-# Launches a default ubuntu image into each subnet
-# Uses just yaml
-
-outputs:
-- name: test-value
-  value: $(ref.test-value.text)
 
 imports:
-- path: network.jinja
-- path: firewall.jinja
-- path: vm.jinja
 - path: qwiklabs.jinja
-- path: test-config.jinja
+
 
 resources:
 - name: qwiklabs

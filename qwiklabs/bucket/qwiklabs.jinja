@@ -1,0 +1,72 @@
+
+
+resources:
+- name: {{ env['project'] }}
+  type: storage.v1.bucket
+
+- name: data-files
+  type: data-files.py
+- name: cirrus.png
+  action: gcp-types/storage-v1:storage.objects.copy
+  metadata:
+    runtimePolicy:
+    - CREATE
+    dependsOn:
+    - {{ env['project'] }}
+  properties:
+    sourceBucket: cloud-training
+    sourceObject: gcpml/c8/cirrus.jpg
+    destinationBucket: {{ env['project'] }}
+    destinationObject: cirrus.png
+
+- name: cirrus.png-acl
+  action: gcp-types/storage-v1:storage.objectAccessControls.insert
+  properties:
+    bucket: {{ env['project'] }}
+    object: cirrus.png
+    entity: allUsers
+    role: READER
+  metadata:
+    dependsOn:
+      - cirrus.png
+
+- type: gcp-types/storage-v1:bucketAccessControls
+  name: {{ env['project'] }}-ACL
+  properties:
+    bucket: {{ env['project'] }}
+    entity: allUsers
+    role: READER
+  metadata:
+    dependsOn:
+    - {{ env['project'] }}
+
+- name: function
+  type: cloud_function.py
+  properties:
+    # All the files that start with this prefix will be packed in the Cloud Function
+    codeLocation: function/
+    codeBucket: {{ env['project'] }}
+    codeBucketObject: function.zip
+    location: us-central1
+    timeout: 60s
+    availableMemoryMb: 256
+    entryPoint: main
+    runtime: python37
+  metadata:
+    dependsOn:
+      - {{ env['project'] }}
+
+- name: function-call
+  action: gcp-types/cloudfunctions-v1:cloudfunctions.projects.locations.functions.call
+  properties:
+    name: $(ref.function.name)
+  metadata:
+    runtimePolicy:
+    - UPDATE_ALWAYS
+
+
+outputs:
+- name: function-output
+  value: $(ref.function-call.result)
+- name: function-code
+  value: $(ref.function.sourceArchiveUrl)

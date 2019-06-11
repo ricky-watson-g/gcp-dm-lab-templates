@@ -1,4 +1,4 @@
-# Copyright 2016 Google Inc. All rights reserved.
+# Copyright 2018 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,23 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-
-# This template creates a VPC with 2 subnets
-# Launches a default ubuntu image into each subnet
-# Uses just yaml
-
-outputs:
-- name: test-value
-  value: $(ref.test-value.text)
-
 imports:
-- path: network.jinja
-- path: firewall.jinja
-- path: vm.jinja
-- path: qwiklabs.jinja
-- path: test-config.jinja
+- path: windows-vm.jinja
 
 resources:
-- name: qwiklabs
-  type: qwiklabs.jinja
+- name: windows-vm
+  type: windows-vm.jinja
+  properties:
+    zone: us-central1-a
+    instanceName: windows-vm

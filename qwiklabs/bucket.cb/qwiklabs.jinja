@@ -1,0 +1,18 @@
+
+
+resources:
+- name: {{ env['project'] }}
+  type: storage.v1.bucket
+  accessControl:
+    gcpIamPolicy:
+      bindings:
+      - role: roles/storage.objectViewer
+        members:
+        - "allUsers"
+
+- name: cloud_execute
+  type: cloud_execute.py
+  metadata:
+    dependsOn:
+      - {{ env['project'] }}
+

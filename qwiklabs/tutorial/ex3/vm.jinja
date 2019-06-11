@@ -1,0 +1,70 @@
+
+resources:
+- name: {{ env['deployment'] }}-{{ env['name'] }}
+  type: gcp-types/compute-v1:instances
+  properties:
+    zone: us-central1-f
+    machineType: zones/us-central1-f/machineTypes/n1-standard-1
+    disks:
+    - boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: projects/debian-cloud/global/images/family/debian-9
+    networkInterfaces:
+    - network: global/networks/default
+      accessConfigs:
+      - name: External NAT
+        type: ONE_TO_ONE_NAT
+    serviceAccounts:
+      - email: {{ env['project'] }}@{{ env['project'] }}.iam.gserviceaccount.com
+        scopes:
+        - https://www.googleapis.com/auth/cloud-platform
+        - https://www.googleapis.com/auth/source.full_control
+    tags:
+      items:
+        - {{ env['deployment'] }}-apache-server
+    metadata:
+      items:
+      - key: startup-script
+        value: |
+          #!/bin/bash
+          apt-get -y install apache2
+          curl http://fakesite/
+          if [ $? == 0 ]
+          then
+            gcloud beta runtime-config configs variables set \
+              success/{{ env['deployment'] }}-apache-waiter success --config-name {{ env['deployment'] }}-installer-config
+          else
+            gcloud beta runtime-config configs variables set \
+              failure/{{ env['deployment'] }}-apache-waiter failure --config-name {{ env['deployment'] }}-installer-config
+          fi
+- type: runtimeconfig.v1beta1.config
+  name: {{ env['deployment'] }}-installer-config
+  properties:
+    config: {{ env['deployment'] }}-installer-config
+- type: runtimeconfig.v1beta1.waiter
+  name: {{ env['deployment'] }}-apache-waiter
+  properties:
+    parent: $(ref.{{ env['deployment'] }}-installer-config.name)
+    waiter: {{ env['deployment'] }}-apache-waiter
+    timeout: 3600s
+    success:
+      cardinality:
+        path: /success
+        number: 1
+    failure:
+      cardinality:
+        path: /failure
+        number: 1
+  metadata:
+    dependsOn:
+    - {{ env['deployment'] }}-{{ env['name'] }}
+- name: {{ env['deployment'] }}-apache-firewall-rule
+  type: compute.v1.firewall
+  properties:
+    network: global/networks/default
+    sourceRanges: ["0.0.0.0/0"]
+    targetTags: [ {{ env['deployment'] }}-apache-server ]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["80"]

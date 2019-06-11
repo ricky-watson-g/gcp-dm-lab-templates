@@ -12,22 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-# This template creates a VPC with 2 subnets
-# Launches a default ubuntu image into each subnet
-# Uses just yaml
-
-outputs:
-- name: test-value
-  value: $(ref.test-value.text)
-
 imports:
-- path: network.jinja
-- path: firewall.jinja
-- path: vm.jinja
 - path: qwiklabs.jinja
-- path: test-config.jinja
 
 resources:
 - name: qwiklabs
   type: qwiklabs.jinja
+  properties:
+    zone: us-central1-a
+    instanceName: labvm
