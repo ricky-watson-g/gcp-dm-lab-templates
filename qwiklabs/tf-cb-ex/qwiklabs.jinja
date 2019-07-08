@@ -1,0 +1,36 @@
+
+
+resources:
+- name: execute-tf
+  action: gcp-types/cloudbuild-v1:cloudbuild.projects.builds.create
+  metadata:
+    runtimePolicy:
+    - UPDATE_ON_CHANGE
+  properties:
+    steps:
+    - name: gcr.io/cloud-builders/gsutil
+      args:
+      - cp
+      - gs://cloud-training/tf/demo/lab.tf
+      - .
+    - name: 'ubuntu'
+      args:
+      - bash
+      - -c
+      - echo '{{ properties['keyFile'] }}' > sa.key
+    - name: registry.hub.docker.com/gcptraining/sed
+      args:
+      - -i
+      - s/project-id/{{ env["project"] }}/g
+      - lab.tf
+    - name: registry.hub.docker.com/gcptraining/terraform:test
+      args:
+      - init
+    - name: registry.hub.docker.com/gcptraining/terraform:test
+      args:
+      - plan
+    - name: registry.hub.docker.com/gcptraining/terraform:test
+      args:
+      - apply
+      - --auto-approve
+    timeout: 300s

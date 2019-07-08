@@ -53,3 +53,7 @@ resources:
     allowed:
     - IPProtocol: TCP
       ports: ["5901", "6901"]
+
+outputs:
+- name: ip
+  value: $(ref.vm.networkInterfaces[0].accessConfigs[0].natIP)
