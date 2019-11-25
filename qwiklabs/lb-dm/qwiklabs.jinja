@@ -1,0 +1,80 @@
+resources:
+- name: {{ env["deployment"] }}-{{ properties['lab-network-name'] }}
+  type: gcp-types/compute-v1:networks
+  properties:
+    autoCreateSubnetworks: false
+
+- name: {{ env["deployment"] }}-{{ properties['lab-network-name'] }}-subnet-a
+  type: gcp-types/compute-v1:subnetworks
+  properties:
+    ipCidrRange: 10.128.16.0/20
+    network: $(ref.{{ env["deployment"] }}-{{ properties['lab-network-name'] }}.selfLink)
+    region: us-central1
+
+- name: {{ env["deployment"] }}-{{ properties['lab-network-name'] }}-subnet-b
+  type: gcp-types/compute-v1:subnetworks
+  properties:
+    ipCidrRange: 10.128.32.0/20
+    network: $(ref.{{ env["deployment"] }}-{{ properties['lab-network-name'] }}.selfLink)
+    region: us-west1
+
+- name: {{ env["deployment"] }}-health-check-rule
+  type: gcp-types/compute-v1:firewalls
+  properties:
+    network: $(ref.{{ env["deployment"] }}-{{ properties['lab-network-name'] }}.selfLink)
+    sourceRanges: ["130.211.0.0/22", "35.191.0.0/16"]
+    targetTags: [ {{ properties["http-server"] }} ]
+    allowed:
+    - IPProtocol: tcp
+      ports: [ '80' ]
+
+- name: {{ env["deployment"] }}-http-server-rule
+  type: gcp-types/compute-v1:firewalls
+  properties:
+    network: $(ref.{{ env["deployment"] }}-{{ properties['lab-network-name'] }}.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    targetTags: [ {{ properties["http-server"] }} ]
+    allowed:
+    - IPProtocol: tcp
+      ports: [ '80' ]
+
+- name: {{ env["deployment"] }}-lab-it
+  type: gcp-types/compute-v1:instanceTemplates
+  properties:
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        diskName: {{ env["deployment"] }}-disk
+        sourceImage: projects/debian-cloud/global/images/family/debian-9
+    machineType: n1-standard-1
+    metadata:
+      items:
+      - key: startup-script
+        value: 
+        - #!/bin/bash 
+          echo hi
+    networkInterfaces:
+    - network: $(ref.{{ env["deployment"] }}-{{ properties['lab-network-name'] }}.selfLink)
+      accessConfigs:
+      - name: External-IP
+        type: ONE_TO_ONE_NAT
+
+- name: {{ env["deployment"] }}-lab-hc
+  type: gcp-types/compute-v1:httpHealthChecks
+  properties:
+    port: 80
+
+- name: {{ env["deployment"] }}-lab-igm
+  type: gcp-types/compute-v1:regionInstanceGroupManagers
+  properties:
+    region: us-central1
+    zone: us-central1-a
+    targetSize: 1
+    baseInstanceName: lab-instance
+    instanceTemplate: $(ref.{{ env["deployment"] }}-lab-it.selfLink)
+    autoHealingPolicies:
+    - healthCheck: $(ref.{{ env["deployment"] }}-lab-hc.selfLink)
+      actionType: RECREATE

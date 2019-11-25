@@ -55,6 +55,8 @@ resources:
       ports: ["5901", "6901"]
 
 outputs:
-- name: site
-  value: $(ref.{{ properties["instanceName"] }}.networkInterfaces[0].accessConfigs[0].natIP)
+- name: web
+  value: http://$(ref.{{ properties["instanceName"] }}.networkInterfaces[0].accessConfigs[0].natIP):6901/  
+- name: vnc
+  value: $(ref.{{ properties["instanceName"] }}.networkInterfaces[0].accessConfigs[0].natIP):5901
   

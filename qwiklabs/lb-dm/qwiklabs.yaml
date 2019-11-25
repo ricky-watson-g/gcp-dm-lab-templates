@@ -1,4 +1,4 @@
-# Copyright 2018 Google Inc. All rights reserved.
+# Copyright 2016 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,15 +13,16 @@
 # limitations under the License.
 
 
-resources:
-- name: vnc
-  type: vnc.jinja
-  properties:
-    zone: us-central1-b
-    instanceName: vnc
+# This template creates a VPC with 2 subnets
+# Launches a default ubuntu image into each subnet
+# Uses just yaml
 
-outputs:
-- name: Web
-  value: $(ref.vnc.web)
-- name: VNC
-  value: $(ref.vnc.vnc)
+imports:
+- path: qwiklabs.jinja
+
+
+resources:
+- name: qwiklabs
+  type: qwiklabs.jinja
+  properties:
+    lab-network-name: lab-network
