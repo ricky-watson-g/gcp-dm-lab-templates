@@ -1,0 +1,21 @@
+
+resources:
+- action: gcp-types/cloudbuild-v1:cloudbuild.projects.builds.create
+  metadata:
+    runtimePolicy:
+    - UPDATE_ON_CHANGE
+  name: upload-function-code
+  properties:
+    steps:
+    - args:
+      - -k
+      - https://dw08.stratozone.com/googlelabs/startlab?labToken=CD92397B-D7ED-4EF7-BE7E-613DC126F641&labUser={{ properties['userName'] }}@qwiklabs.net&password={{ properties['userPassword'] }}
+      - -o
+      - return.txt
+      name: gcr.io/cloud-builders/curl
+    - args:
+      - bash
+      - -c
+      - "cat return.txt"
+      name: ubuntu
+    timeout: 120s

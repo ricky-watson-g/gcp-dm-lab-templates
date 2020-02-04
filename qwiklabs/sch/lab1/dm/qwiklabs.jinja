@@ -1,0 +1,97 @@
+{% set ZONE = "us-central1-b" %}
+{% set REGION = "us-central1" %}
+
+resources:
+{# Networks #}
+- name: mgmt-vpc
+  type: gcp-types/compute-v1:networks
+  properties:
+    description: "Management VPC"
+    autoCreateSubnetworks: false
+
+- name: webapp-vpc
+  type: gcp-types/compute-v1:networks
+  properties:
+    description: "Webapp VPC"
+    autoCreateSubnetworks: false
+
+{# Subnets #}
+- name: mgmt-subnet
+  type: gcp-types/compute-v1:subnetworks
+  properties:
+    ipCidrRange: 192.168.10.0/24
+    network: $(ref.mgmt-vpc.selfLink)
+    region: {{ REGION }}
+    privateIpGoogleAccess: true
+    enableFlowLogs: true
+    logConfig:
+      enable: true
+      flowSampling: 1
+
+- name: webapp-subnet
+  type: gcp-types/compute-v1:subnetworks
+  properties:
+    ipCidrRange: 192.168.11.0/24
+    network: $(ref.webapp-vpc.selfLink)
+    region: {{ REGION }}
+    privateIpGoogleAccess: true
+    enableFlowLogs: true
+    logConfig:
+      enable: true
+      flowSampling: 1
+
+{# Cloud Router/NAT #}
+- name: mgmt-rtr
+  type: compute.v1.router
+  properties:
+    network: $(ref.mgmt-vpc.selfLink)
+    region: {{ REGION }}
+    nats:
+    - name: mgmt-nat
+      sourceSubnetworkIpRangesToNat: LIST_OF_SUBNETWORKS
+      subnetworks:
+      - name: $(ref.mgmt-subnet.selfLink)
+        sourceIpRangesToNat: 
+        - PRIMARY_IP_RANGE
+      natIpAllocateOption: AUTO_ONLY
+
+{# Jump Host #}
+- name: jumphost
+  type: compute.v1.instance
+  properties:
+    zone: {{ ZONE }}
+    machineType: projects/{{ env["project"] }}/zones/{{ ZONE }}/machineTypes/f1-micro
+    serviceAccounts:
+    - email: default
+      scopes: 
+      - https://www.googleapis.com/auth/cloud-platform
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: projects/debian-cloud/global/images/family/debian-9
+    networkInterfaces:
+    - subnetwork: regions/{{ REGION }}/subnetworks/mgmt-subnet
+  metadata:
+    dependsOn: 
+    - mgmt-subnet
+
+{# Firewall Rules #}
+- name: mgmt-fw-ssh
+  type: gcp-types/compute-v1:firewalls
+  properties:
+    network: projects/{{ env['project'] }}/global/networks/mgmt-vpc
+    sourceRanges: [35.235.240.0/20]
+    priority: 100
+    allowed:
+    - IPProtocol: tcp
+      ports: [22]
+    targetTags:
+    - ssh-ingress
+  metadata:
+    dependsOn: 
+    - mgmt-vpc
+
+

@@ -1,80 +1,135 @@
 resources:
-- name: {{ env["deployment"] }}-{{ properties['lab-network-name'] }}
+{# network items #}
+- name: lab-network
   type: gcp-types/compute-v1:networks
   properties:
     autoCreateSubnetworks: false
 
-- name: {{ env["deployment"] }}-{{ properties['lab-network-name'] }}-subnet-a
+- name: lab-network-subnet
   type: gcp-types/compute-v1:subnetworks
   properties:
     ipCidrRange: 10.128.16.0/20
-    network: $(ref.{{ env["deployment"] }}-{{ properties['lab-network-name'] }}.selfLink)
+    network: $(ref.lab-network.selfLink)
     region: us-central1
 
-- name: {{ env["deployment"] }}-{{ properties['lab-network-name'] }}-subnet-b
-  type: gcp-types/compute-v1:subnetworks
-  properties:
-    ipCidrRange: 10.128.32.0/20
-    network: $(ref.{{ env["deployment"] }}-{{ properties['lab-network-name'] }}.selfLink)
-    region: us-west1
-
-- name: {{ env["deployment"] }}-health-check-rule
+{# firewall items #}
+- name: fw-health-check-rule
   type: gcp-types/compute-v1:firewalls
   properties:
-    network: $(ref.{{ env["deployment"] }}-{{ properties['lab-network-name'] }}.selfLink)
+    network: $(ref.lab-network.selfLink)
     sourceRanges: ["130.211.0.0/22", "35.191.0.0/16"]
-    targetTags: [ {{ properties["http-server"] }} ]
+    targetTags: [ "http-server" ]
     allowed:
     - IPProtocol: tcp
-      ports: [ '80' ]
+      ports: [ '3000' ]
 
-- name: {{ env["deployment"] }}-http-server-rule
+- name: fw-http-server-rule
   type: gcp-types/compute-v1:firewalls
   properties:
-    network: $(ref.{{ env["deployment"] }}-{{ properties['lab-network-name'] }}.selfLink)
+    network: $(ref.lab-network.selfLink)
     sourceRanges: ["0.0.0.0/0"]
-    targetTags: [ {{ properties["http-server"] }} ]
+    targetTags: [ "http-server" ]
     allowed:
     - IPProtocol: tcp
-      ports: [ '80' ]
+      ports: ['22', '3000' ]
 
-- name: {{ env["deployment"] }}-lab-it
+
+{# instance items #}
+- name: lab-instance-template
   type: gcp-types/compute-v1:instanceTemplates
   properties:
-    disks:
-    - deviceName: boot
-      type: PERSISTENT
-      boot: true
-      autoDelete: true
-      initializeParams:
-        diskName: {{ env["deployment"] }}-disk
-        sourceImage: projects/debian-cloud/global/images/family/debian-9
-    machineType: n1-standard-1
-    metadata:
-      items:
-      - key: startup-script
-        value: 
-        - #!/bin/bash 
-          echo hi
-    networkInterfaces:
-    - network: $(ref.{{ env["deployment"] }}-{{ properties['lab-network-name'] }}.selfLink)
-      accessConfigs:
-      - name: External-IP
-        type: ONE_TO_ONE_NAT
+    project: {{ env["project"] }}
+    properties:
+      machineType: n1-standard-1
+      tags:
+        items: [ "http-server" ]
+      disks:
+      - deviceName: boot
+        boot: true
+        type: PERSISTENT
+        autoDelete: true
+        mode: READ_WRITE
+        initializeParams:
+          diskName: template-disk
+          sourceImage: projects/cos-cloud/global/images/family/cos-stable
+      networkInterfaces:
+      - subnetwork: $(ref.lab-network-subnet.selfLink)
+        accessConfigs:
+        - name: External-IP
+          type: ONE_TO_ONE_NAT
+      metadata:
+        items:
+        - key: gce-container-declaration
+          value: |
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: juice-shop
+            spec:
+              containers:
+                - name: juice-shop
+                  image: docker.io/bkimminich/juice-shop
+                  imagePullPolicy: Always
+                  ports:
+                    - containerPort: 3000
+                      hostPort: 80
 
-- name: {{ env["deployment"] }}-lab-hc
-  type: gcp-types/compute-v1:httpHealthChecks
-  properties:
-    port: 80
-
-- name: {{ env["deployment"] }}-lab-igm
-  type: gcp-types/compute-v1:regionInstanceGroupManagers
+- name: lab-instance-group-manager
+  type: gcp-types/compute-v1:instanceGroupManagers
   properties:
     region: us-central1
     zone: us-central1-a
     targetSize: 1
     baseInstanceName: lab-instance
-    instanceTemplate: $(ref.{{ env["deployment"] }}-lab-it.selfLink)
+    instanceTemplate: $(ref.lab-instance-template.selfLink)
     autoHealingPolicies:
-    - healthCheck: $(ref.{{ env["deployment"] }}-lab-hc.selfLink)
+    - healthCheck: $(ref.load-balancer-health-check.selfLink)
       actionType: RECREATE
+    namedPorts:
+    - name: juice-shop
+      port: 3000
+
+{# load balancer items #}
+- name: load-balancer-health-check
+  type: gcp-types/compute-v1:httpHealthChecks
+  properties:
+    port: 3000
+
+- name: load-balancer-backend-service
+  type: compute.v1.backendService
+  properties:
+    region: us-central1
+    loadBalancingScheme: EXTERNAL
+    healthChecks:
+    - $(ref.load-balancer-health-check.selfLink)
+    portName: juice-shop
+    protocol: HTTP
+    backends:
+    - description: lab-backend-service
+      group: $(ref.lab-instance-group-manager.instanceGroup)
+
+- name: load-balancer
+  type: compute.v1.urlMap
+  properties:
+    defaultService: $(ref.load-balancer-backend-service.selfLink)
+
+- name: load-balancer-http-proxy
+  type: compute.v1.targetHttpProxy
+  properties:
+    urlMap: $(ref.load-balancer.selfLink)
+
+- name: load-balancer-forwarding-rule
+  type: compute.v1.globalForwardingRule
+  properties:
+    IPAddress: $(ref.load-balancer-static-ip.selfLink)
+    IPProtocol: TCP
+    loadBalancingScheme: EXTERNAL
+    portRange: '80-80'
+    target: $(ref.load-balancer-http-proxy.selfLink)
+
+- name: load-balancer-static-ip
+  type: compute.v1.globalAddress
+
+output:
+- name: site
+  value: http://$(res.)

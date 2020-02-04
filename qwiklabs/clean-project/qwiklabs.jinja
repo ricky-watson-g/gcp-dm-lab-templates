@@ -1,0 +1,424 @@
+
+{% set ZONE = "us-central1-b" %}
+{% set REGION = "us-central1" %}
+
+resources:
+{# Networks #}
+- name: qwiklabs-security-vpc-mgmt
+  type: gcp-types/compute-v1:networks
+  properties:
+    description: "FW Mgmt, a custom VPC for the Qwiklabs Security Challenge Lab"
+    autoCreateSubnetworks: false
+
+  
+- name: qwiklabs-security-vpc-public
+  type: gcp-types/compute-v1:networks
+  properties:
+    description: "FW Public, a custom VPC for the Qwiklabs Security Challenge Lab"
+    autoCreateSubnetworks: false
+
+  
+- name: qwiklabs-security-vpc-trusted
+  type: gcp-types/compute-v1:networks
+  properties:
+    description: "FW Trusted, a custom VPC for the Qwiklabs Security Challenge Lab"
+    autoCreateSubnetworks: false
+
+  
+- name: qwiklabs-security-vpc-common
+  type: gcp-types/compute-v1:networks
+  properties:
+    description: "Common Services, a custom VPC for the Qwiklabs Security Challenge Lab"
+    autoCreateSubnetworks: false
+
+
+{# Subnets #}
+- name: qwiklabs-security-subnet-mgmt
+  type: gcp-types/compute-v1:subnetworks
+  properties:
+    ipCidrRange: 10.5.0.0/24
+    network: $(ref.qwiklabs-security-vpc-mgmt.selfLink)
+    region: {{ REGION }}
+    privateIpGoogleAccess: true
+    enableFlowLogs: true
+    logConfig:
+      enable: true
+      flowSampling: 1
+
+- name: qwiklabs-security-subnet-jump
+  type: gcp-types/compute-v1:subnetworks
+  properties:
+    ipCidrRange: 10.5.1.0/24
+    network: $(ref.qwiklabs-security-vpc-common.selfLink)
+    region: {{ REGION }}
+    privateIpGoogleAccess: true
+    enableFlowLogs: true
+    logConfig:
+      enable: true
+      flowSampling: 1
+
+- name: qwiklabs-security-subnet-public
+  type: gcp-types/compute-v1:subnetworks
+  properties:
+    ipCidrRange: 10.5.2.0/24
+    network: $(ref.qwiklabs-security-vpc-public.selfLink)
+    region: {{ REGION }}
+    privateIpGoogleAccess: true
+    enableFlowLogs: true
+    logConfig:
+      enable: true
+      flowSampling: 1
+
+- name: qwiklabs-security-subnet-trusted
+  type: gcp-types/compute-v1:subnetworks
+  properties:
+    ipCidrRange: 10.5.3.0/24
+    network: $(ref.qwiklabs-security-vpc-trusted.selfLink)
+    region: {{ REGION }}
+    privateIpGoogleAccess: true
+    enableFlowLogs: true
+    logConfig:
+      enable: true
+      flowSampling: 1
+
+- name: qwiklabs-security-subnet-common
+  type: gcp-types/compute-v1:subnetworks
+  properties:
+    ipCidrRange: 10.5.4.0/24
+    network: $(ref.qwiklabs-security-vpc-common.selfLink)
+    region: {{ REGION }}
+    privateIpGoogleAccess: true
+    enableFlowLogs: true
+    logConfig:
+      enable: true
+      flowSampling: 1
+
+{# Cloud Router/NAT #}
+
+- name: qwiklabs-security-rtr-common
+  type: compute.v1.router
+  properties:
+    network: $(ref.qwiklabs-security-vpc-common.selfLink)
+    region: {{ REGION }}
+    nats:
+    - name: qwiklabs-security-gw-common
+      sourceSubnetworkIpRangesToNat: LIST_OF_SUBNETWORKS
+      subnetworks:
+      - name: $(ref.qwiklabs-security-subnet-common.selfLink)
+        sourceIpRangesToNat: 
+        - PRIMARY_IP_RANGE
+      natIpAllocateOption: AUTO_ONLY
+      logConfig:
+        enable: true
+        filter: ALL
+
+{# VPC Peerings #}
+- name: sbu-peer-mgmt-common
+  action: gcp-types/compute-v1:compute.networks.addPeering
+  metadata:
+    runtimePolicy:
+    - CREATE
+  properties:
+    network: qwiklabs-security-vpc-mgmt
+    name: sbu-peer-mgmt-common
+    autoCreateRoutes: true
+    peerNetwork: $(ref.qwiklabs-security-vpc-common.selfLink)
+  metadata:
+    dependsOn:
+    - qwiklabs-security-vpc-common
+
+- name: sbu-peer-common-mgmt
+  action: gcp-types/compute-v1:compute.networks.addPeering
+  metadata:
+    runtimePolicy:
+    - CREATE
+  properties:
+    network: qwiklabs-security-vpc-common
+    name: sbu-peer-common-mgmt
+    autoCreateRoutes: true
+    peerNetwork: $(ref.qwiklabs-security-vpc-mgmt.selfLink)
+  metadata:
+    dependsOn:
+    - qwiklabs-security-vpc-mgmt
+    - sbu-peer-mgmt-common
+
+- name: sbu-peer-common-trusted
+  action: gcp-types/compute-v1:compute.networks.addPeering
+  metadata:
+    runtimePolicy:
+    - CREATE
+  properties:
+    network: qwiklabs-security-vpc-common
+    name: sbu-peer-common-trusted
+    autoCreateRoutes: true
+    peerNetwork: $(ref.qwiklabs-security-vpc-trusted.selfLink)
+  metadata:
+    dependsOn:
+    - qwiklabs-security-vpc-common
+    - qwiklabs-security-vpc-trusted
+    - sbu-peer-common-mgmt
+
+- name: sbu-peer-trusted-common
+  action: gcp-types/compute-v1:compute.networks.addPeering
+  metadata:
+    runtimePolicy:
+    - CREATE
+  properties:
+    network: qwiklabs-security-vpc-trusted
+    name: sbu-peer-trusted-common
+    autoCreateRoutes: true
+    peerNetwork: $(ref.qwiklabs-security-vpc-common.selfLink)
+  metadata:
+    dependsOn:
+    - qwiklabs-security-vpc-common
+    - qwiklabs-security-vpc-trusted
+    - sbu-peer-common-trusted
+
+{# Firewall Rules #}
+- name: qwiklabs-security-fw-allow-vpc-ssh-common
+  type: gcp-types/compute-v1:firewalls
+  properties:
+    network: projects/{{ env['project'] }}/global/networks/qwiklabs-security-vpc-common
+    sourceRanges: [10.5.0.0/16]
+    priority: 100
+    allowed:
+    - IPProtocol: tcp
+      ports: [22]
+    targetTags:
+    - common-ingress
+  metadata:
+    dependsOn: 
+    - qwiklabs-security-vpc-mgmt
+
+- name: qwiklabs-security-fw-allow-iap-ssh-jump
+  type: gcp-types/compute-v1:firewalls
+  properties:
+    network: projects/{{ env['project'] }}/global/networks/qwiklabs-security-vpc-common
+    sourceRanges: [36.235.240.0/20]
+    priority: 100
+    allowed:
+    - IPProtocol: tcp
+      ports: [22]
+    targetTags:
+    - jumphost-ingress
+  metadata:
+    dependsOn: 
+    - qwiklabs-security-vpc-mgmt
+
+- name: qwiklabs-security-fw-allow-vpc-ssh-web
+  type: gcp-types/compute-v1:firewalls
+  properties:
+    network: projects/{{ env['project'] }}/global/networks/qwiklabs-security-vpc-trusted
+    sourceRanges: [10.5.0.0/16]
+    priority: 100
+    allowed:
+    - IPProtocol: tcp
+      ports: [22]
+    targetTags:
+    - web-ingress
+  metadata:
+    dependsOn: 
+    - qwiklabs-security-vpc-mgmt
+
+- name: qwiklabs-security-fw-allow-vpc-http-public
+  type: gcp-types/compute-v1:firewalls
+  properties:
+    network: projects/{{ env['project'] }}/global/networks/qwiklabs-security-vpc-public
+    sourceRanges: [0.0.0.0/0]
+    priority: 100
+    disabled: true
+    allowed:
+    - IPProtocol: tcp
+      ports: [80]
+    targetTags:
+    - public-ingress
+  metadata:
+    dependsOn: 
+    - qwiklabs-security-vpc-public
+
+- name: qwiklabs-security-fw-allow-vpc-https-mgmt
+  type: gcp-types/compute-v1:firewalls
+  properties:
+    network: projects/{{ env['project'] }}/global/networks/qwiklabs-security-vpc-mgmt
+    sourceRanges: [0.0.0.0/0]
+    priority: 100
+    disabled: true
+    allowed:
+    - IPProtocol: tcp
+      ports: [443]
+    targetTags:
+    - mgmt-ingress
+  metadata:
+    dependsOn: 
+    - qwiklabs-security-vpc-mgmt
+  
+- name: qwiklabs-security-fw-allow-vpc-http-trusted
+  type: gcp-types/compute-v1:firewalls
+  properties:
+    network: projects/{{ env['project'] }}/global/networks/qwiklabs-security-vpc-trusted
+    sourceRanges: [10.5.0.0/16]
+    priority: 100
+    allowed:
+    - IPProtocol: tcp
+      ports: [80]
+    targetTags:
+    - web-ingress
+  metadata:
+    dependsOn: 
+    - qwiklabs-security-vpc-trusted
+
+{# instances #}
+
+{# Jump Host #}
+- name: qwiklabs-security-gce-jump
+  type: compute.v1.instance
+  properties:
+    zone: {{ ZONE }}
+    machineType: projects/{{ env["project"] }}/zones/{{ ZONE }}/machineTypes/n1-standard-1
+    tags:
+      items:
+        - jumphost-ingresss
+    serviceAccounts:
+    - email: default
+      scopes: 
+      - https://www.googleapis.com/auth/cloud.useraccounts.readonly
+      - https://www.googleapis.com/auth/devstorage.read_only
+      - https://www.googleapis.com/auth/logging.write
+      - https://www.googleapis.com/auth/monitoring.write
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: projects/qwiklabs-resources/global/images/qwiklabs-security-gce-images-jumphost-v1
+    networkInterfaces:
+    - subnetwork: regions/{{ REGION }}/subnetworks/qwiklabs-security-subnet-jump
+      networkIP: 10.5.1.5
+  metadata:
+    dependsOn: 
+    - qwiklabs-security-subnet-jump
+
+{# Common CICD #}
+- name: qwiklabs-security-gce-common
+  type: compute.v1.instance
+  properties:
+    zone: {{ ZONE }}
+    machineType: projects/{{ env["project"] }}/zones/{{ ZONE }}/machineTypes/n1-standard-1
+    serviceAccounts:
+    - email: default
+      scopes: 
+      - https://www.googleapis.com/auth/cloud.useraccounts.readonly
+      - https://www.googleapis.com/auth/devstorage.read_only
+      - https://www.googleapis.com/auth/logging.write
+      - https://www.googleapis.com/auth/monitoring.write
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: projects/qwiklabs-resources/global/images/qwiklabs-security-gce-images-common-v1
+    networkInterfaces:
+    - subnetwork: regions/{{ REGION }}/subnetworks/qwiklabs-security-subnet-common
+      networkIP: 10.5.4.6
+  metadata:
+    dependsOn: 
+    - qwiklabs-security-subnet-common
+
+{# Firewall Instance #}
+- name: qwiklabs-security-gce-firewall
+  type: compute.v1.instance
+  properties:
+    zone: {{ ZONE }}
+    canIpForward: true
+    machineType: projects/{{ env["project"] }}/zones/{{ ZONE }}/machineTypes/n1-standard-4
+    tags:
+      items:
+        - jumphost-ingress
+    serviceAccounts:
+    - email: default
+      scopes: 
+      - https://www.googleapis.com/auth/devstorage.read_only
+      - https://www.googleapis.com/auth/logging.write
+      - https://www.googleapis.com/auth/monitoring.write
+      - https://www.googleapis.com/auth/servicecontrol
+      - https://www.googleapis.com/auth/service.management.readonly
+      - https://www.googleapis.com/auth/trace.append
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: projects/qwiklabs-resources/global/images/qwiklabs-security-panw-fw-v2
+    networkInterfaces:
+    - subnetwork: regions/{{ REGION }}/subnetworks/qwiklabs-security-subnet-mgmt
+      networkIP: 10.5.0.4
+      accessConfigs:
+      - name: MGMT Access
+        type: ONE_TO_ONE_NAT
+    - subnetwork: regions/{{ REGION }}/subnetworks/qwiklabs-security-subnet-public
+      networkIP: 10.5.2.4
+      accessConfigs:
+      - name: External Access
+        type: ONE_TO_ONE_NAT
+    - subnetwork: regions/{{ REGION }}/subnetworks/qwiklabs-security-subnet-trusted
+      networkIP: 10.5.3.4  
+  metadata:
+    dependsOn: 
+    - qwiklabs-security-subnet-trusted
+    - qwiklabs-security-subnet-public
+    - qwiklabs-security-subnet-mgmt
+
+{# Web Host #}
+- name: qwiklabs-security-gce-web
+  type: compute.v1.instance
+  properties:
+    zone: {{ ZONE }}
+    machineType: projects/{{ env["project"] }}/zones/{{ ZONE }}/machineTypes/n1-standard-1
+    tags:
+      items:
+        - web-ingress
+    serviceAccounts:
+    - email: default
+      scopes: 
+      - https://www.googleapis.com/auth/cloud.useraccounts.readonly
+      - https://www.googleapis.com/auth/devstorage.read_only
+      - https://www.googleapis.com/auth/logging.write
+      - https://www.googleapis.com/auth/monitoring.write
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: projects/qwiklabs-resources/global/images/qwiklabs-security-gce-images-webhost-v2
+    networkInterfaces:
+    - subnetwork: regions/{{ REGION }}/subnetworks/qwiklabs-security-subnet-trusted
+      networkIP: 10.5.3.7
+  metadata:
+    dependsOn: 
+    - qwiklabs-security-subnet-trusted
+
+{# Routes for trusted to FW traffic #}
+- name: qwiklabs-security-gw-trusted
+  type: compute.v1.route
+  properties:
+    name: qwiklabs-security-gw-trusted
+    network: $(ref.qwiklabs-security-vpc-trusted.selfLink)
+    destRange: 0.0.0.0/0
+    nextHopIp: 10.5.3.4
+    priority: 100
+  metadata:
+    dependsOn: 
+    - qwiklabs-security-gce-firewall
+    - qwiklabs-security-rtr-common
+
+outputs:
+- name: WebServer-PublicIP-Address
+  value: $(ref.qwiklabs-security-gce-firewall.networkInterfaces[1].accessConfigs[0].natIP)
+- name: Firewall-PublicIP-Address
+  value: $(ref.qwiklabs-security-gce-firewall.networkInterfaces[0].accessConfigs[0].natIP)
+- name: Firewall-Password
+  value: 5MbGW9c7VfpY

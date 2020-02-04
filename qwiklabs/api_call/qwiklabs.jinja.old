@@ -1,0 +1,34 @@
+
+resources:
+- name: api_call
+  type: api_call.py
+  metadata:
+    dependsOn:
+      - {{ env['deployment'] }}-username
+      - {{ env['deployment'] }}-password
+      - lab
+
+- type: runtimeconfig.v1beta1.config
+  name: lab
+  properties:
+    config: lab
+
+- name: {{ env['deployment'] }}-username
+  type: runtimeconfig.v1beta1.variable
+  properties:
+    parent: $(ref.lab.name)
+    variable: {{ env['deployment'] }}-username
+    text: none
+
+- name: {{ env['deployment'] }}-password
+  type: runtimeconfig.v1beta1.variable
+  properties:
+    parent: $(ref.lab.name)
+    variable: {{ env['deployment'] }}-password
+    text: none
+
+outputs:
+- name: username
+  value: $(ref.{{ env['deployment'] }}-username.text)
+- name: password
+  value: $(ref.{{ env['deployment'] }}-password.text)

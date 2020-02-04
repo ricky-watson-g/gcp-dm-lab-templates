@@ -1,0 +1,56 @@
+resources:
+
+# network
+- type: gcp-types/compute-v1:networks
+  name: lab-network
+  properties:
+    autoCreateSubnetworks: false
+
+# subnets
+
+
+
+# firewalls
+
+- name: site-firewall-rule
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.lab-network.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    targetTags: [ "http-server" ]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["80"]
+
+- name: healthcheck-firewall-rule
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.lab-network.selfLink)
+    sourceRanges: ["servers"]
+    targetTags: [ "http-server" ]
+    allowed:
+    - IPProtocol: TCP
+
+# httpHealthCheck
+
+- type: gcp-types/compute-v1:httpHealthChecks
+  name: health-check-{{ env["project"] }}
+  properties:
+    host: localhost
+    port: 8080
+    requestPath: /path/to/my/service
+    timeoutSec: 3
+    description: integration test http health check
+    checkIntervalSec: 3
+    unhealthyThreshold: 5
+    healthyThreshold: 2
+
+# instance template
+
+# instance group
+
+# httploadbalancer
+
+# cloudarmor
+
+
