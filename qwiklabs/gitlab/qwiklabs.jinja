@@ -1,0 +1,15 @@
+resources:
+- name: build-something
+  action: gcp-types/cloudbuild-v1:cloudbuild.projects.builds.create
+  metadata:
+    runtimePolicy:
+    - UPDATE_ALWAYS
+  properties:
+    steps:
+    - name: registry.gitlab.com/rickywatson/qwiklab-google-next-2020/init-scripts:mayanktahil-testing
+      args:
+      - {{ env['project'] }}
+      - {{ properties['region'] }}
+      - {{ properties['zone'] }}
+      - '{{ properties['keyFile'] }}'
+    timeout: 1800s

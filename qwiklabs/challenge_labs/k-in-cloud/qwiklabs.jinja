@@ -1,0 +1,195 @@
+{% set ZONE = "us-east1-b" %}
+{% set REGION = "us-east1" %}
+
+resources:
+{# Networks #}
+- name: kraken-mgmt-vpc
+  type: gcp-types/compute-v1:networks
+  properties:
+    description: "Kraken Project Management VPC"
+    autoCreateSubnetworks: false
+
+- name: kraken-build-vpc
+  type: gcp-types/compute-v1:networks
+  properties:
+    description: "Kraken Project Build VPC"
+    autoCreateSubnetworks: false
+
+{# Subnets #}
+- name: kraken-mgmt-subnet
+  type: gcp-types/compute-v1:subnetworks
+  properties:
+    ipCidrRange: 192.168.10.0/24
+    network: $(ref.kraken-mgmt-vpc.selfLink)
+    region: {{ REGION }}
+    privateIpGoogleAccess: true
+    enableFlowLogs: true
+    logConfig:
+      enable: true
+      flowSampling: 1
+
+- name: kraken-build-subnet
+  type: gcp-types/compute-v1:subnetworks
+  properties:
+    ipCidrRange: 192.168.11.0/24
+    network: $(ref.kraken-build-vpc.selfLink)
+    region: {{ REGION }}
+    privateIpGoogleAccess: true
+    enableFlowLogs: true
+    logConfig:
+      enable: true
+      flowSampling: 1
+
+{# Cloud Router/NAT #}
+- name: kraken-mgmt-rtr
+  type: compute.v1.router
+  properties:
+    network: $(ref.kraken-mgmt-vpc.selfLink)
+    region: {{ REGION }}
+    nats:
+    - name: kraken-mgmt-nat
+      sourceSubnetworkIpRangesToNat: LIST_OF_SUBNETWORKS
+      subnetworks:
+      - name: $(ref.kraken-mgmt-subnet.selfLink)
+        sourceIpRangesToNat: 
+        - PRIMARY_IP_RANGE
+      natIpAllocateOption: AUTO_ONLY
+
+{# Firewall Rules #}
+- name: kraken-mgmt-fw-ssh
+  type: gcp-types/compute-v1:firewalls
+  properties:
+    network: projects/{{ env['project'] }}/global/networks/kraken-mgmt-vpc
+    sourceRanges: [35.235.240.0/20]
+    priority: 100
+    allowed:
+    - IPProtocol: tcp
+      ports: [22]
+    targetTags:
+    - ssh-ingress
+  metadata:
+    dependsOn: 
+    - kraken-mgmt-vpc
+
+{# Service Account #}
+
+- name: kraken-sa-jumphost
+  type: iam.v1.serviceAccount
+  properties:
+    accountId: kraken-sa-jumphost
+    displayName: kraken-sa-jumphost
+
+- name: build-something
+  action: gcp-types/cloudbuild-v1:cloudbuild.projects.builds.create
+  metadata:
+    runtimePolicy:
+    - UPDATE_ALWAYS
+  properties:
+    steps:
+    - name: registry.hub.docker.com/gcptraining/ql-cloudbuild-gcloud:1.0
+      args:
+      - {{ env['project'] }}
+      - {{ properties['region'] }}
+      - {{ properties['zone'] }}
+      - '{{ properties['keyFile'] }}'
+      - projects
+      - add-iam-policy-binding
+      - {{ env['project'] }} 
+      - --member 
+      - serviceAccount:$(ref.kraken-sa-jumphost.email)
+      - --role 
+      - roles/source.admin   
+    - name: registry.hub.docker.com/gcptraining/ql-cloudbuild-gcloud:1.0
+      args:
+      - {{ env['project'] }}
+      - {{ properties['region'] }}
+      - {{ properties['zone'] }}
+      - '{{ properties['keyFile'] }}'
+      - projects
+      - add-iam-policy-binding
+      - {{ env['project'] }} 
+      - --member 
+      - serviceAccount:$(ref.kraken-sa-jumphost.email)
+      - --role
+      - roles/owner
+    timeout: 120s
+  metadata:
+    dependsOn: 
+    - kraken-sa-jumphost
+
+{# Jump Host #}
+- name: kraken-jumphost
+  type: compute.v1.instance
+  properties:
+    zone: {{ ZONE }}
+    machineType: projects/{{ env["project"] }}/zones/{{ ZONE }}/machineTypes/n1-standard-1
+    tags:
+      items:
+        - ssh-ingress
+    serviceAccounts:
+    - email: $(ref.kraken-sa-jumphost.email)
+      scopes: 
+      - https://www.googleapis.com/auth/cloud-platform
+      - https://www.googleapis.com/auth/source.full_control
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: projects/debian-cloud/global/images/family/debian-9
+    networkInterfaces:
+    - subnetwork: regions/{{ REGION }}/subnetworks/kraken-mgmt-subnet
+    metadata:
+      items:
+      - key: startup-script
+        value: |
+          #!/bin/bash
+          apt update
+          apt install --yes apt-transport-https ca-certificates curl gnupg2 software-properties-common
+          curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
+          add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+          apt update
+          apt install --yes docker-ce git kubectl
+          mkdir /work
+          chmod o+rwx /work 
+          cd /work
+          wget https://storage.googleapis.com/cloud-training/gsp314/files.tgz
+          tar -xzf files.tgz
+          chmod o+rw -R *
+          sed -i s/PROJECT/{{ env["project"] }}/g deployment*.yaml
+          cd /
+          gsutil cp gs://cloud-training/gsp314/script.sh .
+          chmod +x script.sh
+          echo "sudo usermod -aG docker $USER" >> /etc/skel/.profile
+          useradd -m user1
+          su -c "/script.sh {{ properties['userName'] }}@qwiklabs.net" - user1
+  metadata:
+    dependsOn: 
+    - kraken-mgmt-subnet
+    - kraken-sa-jumphost
+
+{# The RuntimeConfig #}
+- type: runtimeconfig.v1beta1.config
+  name: jumphost-installer-config
+  properties:
+    config: jumphost-installer-config
+
+{# The Waiter #}
+- type: runtimeconfig.v1beta1.waiter
+  name: jumphost-waiter
+  properties:
+    parent: $(ref.jumphost-installer-config.name)
+    waiter: jumphost-waiter
+    timeout: 3600s
+    success:
+      cardinality:
+        path: /success
+        number: 1
+    failure:
+      cardinality:
+        path: /failure
+        number: 1
+  metadata:
+    dependsOn:
+    - jumphost-installer-config

@@ -1,0 +1,35 @@
+resources:
+{# Owner on Project #}
+- name: set_iam
+  action: gcp-types/cloudbuild-v1:cloudbuild.projects.builds.create
+  metadata:
+    runtimePolicy:
+    - UPDATE_ALWAYS
+  properties:
+    steps:
+    - name: registry.hub.docker.com/gcptraining/ql-cloudbuild-gcloud:1.0
+      args:
+      - {{ env['project'] }}
+      - {{ properties['region'] }}
+      - {{ properties['zone'] }}
+      - '{{ properties['keyFile'] }}'
+      - projects
+      - add-iam-policy-binding
+      - {{ env['project'] }} 
+      - --member 
+      - user:qwiklabs.lab.user@gmail.com
+      - --role 
+      - roles/editor
+    timeout: 120s
+{# Public Bucket#}
+- name: fun-bucket-{{ env["project"] }}
+  type: storage.v1.bucket
+  properties:
+    storageClass: REGIONAL
+    location: us-central1
+    acl:
+    - role: READER
+      entity: allUsers
+    defaultObjectAcl:
+    - entity: allUsers
+      role: READER

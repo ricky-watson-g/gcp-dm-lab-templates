@@ -49,6 +49,7 @@ resources:
     - default-allow-ssh-delete
     - default-allow-rdp-delete
 
+
 {# Enable service api #}
 - name: iap-enable
   type: deploymentmanager.v2.virtual.enableService
@@ -106,20 +107,53 @@ resources:
         - PRIMARY_IP_RANGE
       natIpAllocateOption: AUTO_ONLY
 
-{# firewall rule #}
-- name: open-access
+{# firewall rules #}
+- name: fw-ssh-ingress
   type: gcp-types/compute-v1:firewalls
   properties:
     network: projects/{{ env['project'] }}/global/networks/acme-vpc
-    sourceRanges: [0.0.0.0/0]
-    priority: 1000
+    sourceRanges: [35.235.240.0/20]
+    priority: 100
     allowed:
     - IPProtocol: tcp
+      ports: [22]
+    targetTags:
+    - ssh-ingress
   metadata:
     dependsOn: 
     - acme-vpc
 
-{# instances #}
+- name: fw-bastion-ingress
+  type: gcp-types/compute-v1:firewalls
+  properties:
+    network: projects/{{ env['project'] }}/global/networks/acme-vpc
+    sourceRanges: [192.168.10.0/24]
+    priority: 100
+    allowed:
+    - IPProtocol: tcp
+      ports: [22]
+    targetTags:
+    - bastion-ingress
+  metadata:
+    dependsOn: 
+    - acme-vpc
+
+- name: fw-http-ingress
+  type: gcp-types/compute-v1:firewalls
+  properties:
+    network: projects/{{ env['project'] }}/global/networks/acme-vpc
+    sourceRanges: [192.168.10.0/24]
+    priority: 100
+    allowed:
+    - IPProtocol: tcp
+      ports: [80]
+    targetTags:
+    - http-ingress
+  metadata:
+    dependsOn: 
+    - acme-vpc
+
+{# Bastion #}
 - name: bastion
   type: compute.v1.instance
   properties:
@@ -134,10 +168,9 @@ resources:
         sourceImage: projects/debian-cloud/global/images/family/debian-9
     networkInterfaces:
     - subnetwork: regions/{{ REGION }}/subnetworks/acme-mgmt-subnet
-    serviceAccounts:
-    - email: default
-      scopes: 
-      - https://www.googleapis.com/auth/cloud-platform
+    tags:
+      items:
+        - ssh-ingress
     metadata:
       items:
       - key: startup-script
@@ -172,6 +205,10 @@ resources:
       accessConfigs:
       - name: External NAT
         type: ONE_TO_ONE_NAT
+    tags:
+      items:
+        - bastion-ingress
+        - http-ingress
     metadata:
       items:
       - key: startup-script

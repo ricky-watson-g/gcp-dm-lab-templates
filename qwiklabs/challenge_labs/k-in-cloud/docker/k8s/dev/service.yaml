@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: lab-app-dev
+  name: lab-app-dev
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: lab-app
+    role: frontend-backend
+    env: dev
+  sessionAffinity: None
+  type: LoadBalancer

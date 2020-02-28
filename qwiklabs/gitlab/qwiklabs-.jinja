@@ -1,0 +1,41 @@
+{% set ZONE = "us-central1-f" %}
+{% set REGION = "us-central1" %}
+
+resources:
+{# instance items #}
+- name: {{ env["deployment"] }}-installer
+  type: compute.v1.instance
+  properties:
+    zone: {{ ZONE }}
+    machineType: projects/{{ env["project"] }}/zones/{{ ZONE }}/machineTypes/n1-standard-1
+    tags:
+      items:
+        - ssh-ingress
+    serviceAccounts:
+    - email: {{ env ['project'] }}@{{ env ['project'] }}.iam.gserviceaccount.com
+      scopes: 
+      - https://www.googleapis.com/auth/cloud-platform
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: projects/debian-cloud/global/images/family/debian-9
+    networkInterfaces:
+    - network: global/networks/default
+      accessConfigs:
+      - name: External NAT
+        type: ONE_TO_ONE_NAT
+    metadata:
+      items:
+      - key: startup-script
+        value: |
+          #!/bin/bash
+          apt-get -y install apt-transport-https ca-certificates curl software-properties-common
+          curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
+          add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+          apt-get update
+          apt-get -y install docker-ce
+          systemctl enable docker
+          docker run -it --rm registry.gitlab.com/gitlab-com/alliances/google/sandbox-projects/qwiklab-google-next-2020/init-scripts:mayanktahil-testing
